@@ -22,7 +22,6 @@ namespace Attandance_System.Controllers
         public async Task<ActionResult<IEnumerable<Attendance>>> GetAllAttendance()
         {
             return await _context.Attendances
-                                 .Include(a => a.Student)
                                  .ToListAsync();
         }
 
@@ -32,7 +31,6 @@ namespace Attandance_System.Controllers
         {
             var records = await _context.Attendances
                                         .Where(a => a.RollNo == rollNo)
-                                        .Include(a => a.Student)
                                         .ToListAsync();
 
             if (!records.Any()) return NotFound($"No attendance records found for RollNo {rollNo}");
@@ -63,6 +61,35 @@ namespace Attandance_System.Controllers
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetAttendanceByRollNo), new { rollNo = rollNo }, attendance);
+        }
+
+        [HttpGet("today-summary")]
+        public async Task<IActionResult> GetTodaySummary()
+        {
+            // today’s date (ignoring time)
+            var today = DateTime.Today;
+
+            // total students in student table
+            var totalStudents = await _context.Students.CountAsync();
+
+            // present students in attendance table
+            var presentStudents = await _context.Attendances
+                .Where(a => a.AttendanceDate.Date == today && a.Status.ToLower() == "present")
+                .Select(a => a.RollNo)
+                .Distinct() // avoid duplicates if multiple rows accidentally exist
+                .CountAsync();
+
+            // absent students = total - present
+            var absentStudents = totalStudents - presentStudents;
+
+            var result = new
+            {
+                totalStudents,
+                presentStudents,
+                absentStudents
+            };
+
+            return Ok(result);
         }
 
         // 4️⃣ Automatically mark absent students for today
